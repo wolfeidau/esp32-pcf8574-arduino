@@ -1,0 +1,6 @@
+[submodule "components/arduino"]
+	path = components/arduino
+	url = https://github.com/espressif/arduino-esp32.git
+[submodule "components/ioextender/PCF8574_ESP"]
+	path = components/ioextender/PCF8574_ESP
+	url = https://github.com/WereCatf/PCF8574_ESP.git
