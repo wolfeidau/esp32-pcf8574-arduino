@@ -10,7 +10,7 @@ void setup_pcf8574();
 void poll_pcf8574();
 void PCFInterrupt();
 
-void ioextender_init() {
+void ioextender_initialize() {
     xTaskCreate(pcf8574_check_task, "pcf8574_check_task", 4096, NULL, 1, NULL);
 }
 

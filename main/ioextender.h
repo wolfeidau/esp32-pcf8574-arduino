@@ -11,4 +11,4 @@
 #include <Wire.h>
 
 
-void ioextender_init();
+void ioextender_initialize();
