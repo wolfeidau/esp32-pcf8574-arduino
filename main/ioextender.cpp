@@ -3,7 +3,9 @@
 TwoWire testWire(1);
 PCF857x pcf8574(0x20, &testWire);
 
-bool PCFInterruptFlag = false;
+button_check_s buttonA, buttonB, encoderButton;
+
+volatile bool PCFInterruptFlag = false;
 
 static void pcf8574_check_task(void *pvParameter);
 void setup_pcf8574();
@@ -11,7 +13,15 @@ void poll_pcf8574();
 void PCFInterrupt();
 
 void ioextender_initialize() {
-    xTaskCreate(pcf8574_check_task, "pcf8574_check_task", 4096, NULL, 1, NULL);
+
+  buttonA.pin = IOEXT_A_BTN;
+  buttonA.state = HIGH;
+  buttonB.pin = IOEXT_B_BTN;
+  buttonB.state = HIGH;
+  encoderButton.pin = IOEXT_ENCODER_BTN;
+  encoderButton.state = HIGH;
+
+  xTaskCreatePinnedToCore(pcf8574_check_task, "pcf8574_check_task", 4096, NULL, 1, NULL, 0);
 }
 
 static void pcf8574_check_task(void *pvParameter)

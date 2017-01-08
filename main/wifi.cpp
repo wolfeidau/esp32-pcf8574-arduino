@@ -18,6 +18,8 @@
 #include "esp_event_loop.h"
 #include "nvs_flash.h"
 
+static const char *TAG = "wifi";
+
 /* FreeRTOS event group to signal when we are connected & ready to make a tcp connection */
 static EventGroupHandle_t wifi_event_group;
 
@@ -48,7 +50,10 @@ void wifi_initialize() {
     strcpy((char*)wifi_config.sta.password, CONFIG_WIFI_PASSWORD);
     wifi_config.sta.bssid_set = false;
 
+    ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", wifi_config.sta.ssid);
+
     ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     ESP_ERROR_CHECK( esp_wifi_start() );
     ESP_ERROR_CHECK( esp_wifi_connect() );
+    
 }
