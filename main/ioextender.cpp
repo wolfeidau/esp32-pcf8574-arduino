@@ -21,7 +21,7 @@ void ioextender_initialize() {
   encoderButton.pin = IOEXT_ENCODER_BTN;
   encoderButton.state = HIGH;
 
-  xTaskCreatePinnedToCore(pcf8574_check_task, "pcf8574_check_task", 4096, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(pcf8574_check_task, "pcf8574_check_task", 4096, NULL, 1, NULL, 1);
 }
 
 static void pcf8574_check_task(void *pvParameter)
@@ -47,7 +47,6 @@ void setup_pcf8574() {
 void poll_pcf8574() {
   
   if(PCFInterruptFlag){
-    detachInterrupt(digitalPinToInterrupt(GPIO_NUM_25));
     Serial.println("Got an interrupt: ");
     
     if(pcf8574.read(1)==HIGH) Serial.println("Button A is HIGH!");
@@ -62,9 +61,8 @@ void poll_pcf8574() {
     else Serial.println("Encoder Button is LOW!"); // it is currently down
     pcf8574.write(7, pcf8574.read(3));
 
-    PCFInterruptFlag=false;
     pcf8574.resetInterruptPin();
-    attachInterrupt(digitalPinToInterrupt(GPIO_NUM_25), PCFInterrupt, FALLING);
+    PCFInterruptFlag = false;
   }
 
   delay(50);
