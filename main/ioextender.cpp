@@ -1,11 +1,13 @@
 #include "ioextender.h"
+#include "esp_log.h"
 
-#define IOEXT_INTERRUPT_PIN GPIO_NUM_25
-#define IOEXT_POLL_INTERVAL_MILLIS 50
-#define IOEXT_DEBOUNCE_MILLIS 100
+static const char *TAG = "ioextender";
 
 TwoWire testWire(1);
 PCF857x pcf8574(0x20, &testWire);
+
+static QueueHandle_t *subscriptions;
+static size_t num_subscriptions;
 
 volatile bool PCFInterruptFlag = false;
 
@@ -18,20 +20,34 @@ void ioextender_initialize() {
   xTaskCreatePinnedToCore(pcf8574_check_task, "pcf8574_check_task", 4096, NULL, 1, NULL, 1);
 }
 
+bool buttons_subscribe(QueueHandle_t queue)
+{
+  void *new_subscriptions = realloc(subscriptions, (num_subscriptions + 1) * sizeof(QueueHandle_t));
+  if (!new_subscriptions) {
+	ESP_LOGE(TAG, "Failed to allocate new subscription #%d", (num_subscriptions+1));
+	return false;
+  }
+
+  num_subscriptions++;
+  subscriptions = (QueueHandle_t *)new_subscriptions;
+  subscriptions[num_subscriptions-1] = queue;
+  return true;
+}
+
 static void pcf8574_check_task(void *pvParameter)
 {
 
-  button_check_s buttonA = {0, 0, HIGH, IOEXT_A_BTN};
-  button_check_s buttonB = {0, 0, HIGH, IOEXT_B_BTN};
-  button_check_s encoderButton = {0, 0, HIGH, IOEXT_ENCODER_BTN};
+  button_check_s buttonA = {0, 0, HIGH, IOEXT_A_BTN, "ButtonA"};
+  button_check_s buttonB = {0, 0, HIGH, IOEXT_B_BTN, "ButtonB"};
+  button_check_s encoderButton = {0, 0, HIGH, IOEXT_ENCODER_BTN, "EncoderButton"};
 
   setup_pcf8574();
 
   while(1) {
     if(PCFInterruptFlag){
-      if (check_button(&buttonA)) Serial.printf("Button A is now: %3d\n", buttonA.state);
-      if (check_button(&buttonB)) Serial.printf("Button B is now: %3d\n", buttonB.state);
-      if (check_button(&encoderButton)) Serial.printf("Encoder Button is now: %3d\n", encoderButton.state);
+      check_button(&buttonA);
+      check_button(&buttonB);
+      check_button(&encoderButton);
 
       pcf8574.resetInterruptPin();
       PCFInterruptFlag = false;
@@ -66,6 +82,16 @@ bool check_button(button_check_s* button) {
     // We have passed the time threshold, so a new change of state is allowed.
     button->previous_millis = millis();
     button->state = readState;
+
+    button_reading_t reading = {
+	  .label = button->label,
+	  .state = stringFromState(button->state),
+    };
+
+    for (int i = 0; i < num_subscriptions; i++) {
+      xQueueSendToBack(subscriptions[i], &reading, 0);
+    }
+
     return true;
   }
 
