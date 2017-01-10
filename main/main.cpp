@@ -1,62 +1,38 @@
-#include <pcf8574_esp.h>
-#include <Wire.h>
+#include "wifi.h"
+#include "ioextender.h"
+#include "esp_system.h"
+#include "esp_event.h"
+#include "esp_log.h"
 
-TwoWire testWire(1);
-PCF857x pcf8574(0x20, &testWire);
+static const char *TAG = "esp32-pcf8574";
 
-bool PCFInterruptFlag = false;
-
-void setup_pcf8574();
-void poll_pcf8574();
-void PCFInterrupt();
+static void send_buttons_task(void *pvParameter);
 
 extern "C" void app_main()
 {
-    setup_pcf8574();
+    //Serial.begin(115200);
+    
+    wifi_initialize();
+    ioextender_initialize();
 
-    while(1) {
-        poll_pcf8574();
+    xTaskCreatePinnedToCore(send_buttons_task, "send_buttons_task", 4096, NULL, 1, NULL, 1);
+}
+
+static void send_buttons_task(void *pvParameter) {
+
+    QueueHandle_t buttons = xQueueCreate(10, sizeof(button_reading_t));
+
+    if (! buttons_subscribe(buttons)) {
+        ESP_LOGE(TAG, "Failed to subscribe to button readings :(");
+    }
+
+    while (1) {
+        button_reading_t reading;
+        if (xQueueReceive(buttons, &reading, 6000 / portTICK_PERIOD_MS)) {
+            ESP_LOGI(TAG, "%s state %s",
+                    reading.label,
+                    reading.state);
+            // mqtt_publish_sensor(reading.label, reading.state)
+        }
     }
 }
-
-void setup_pcf8574() {
-  Serial.begin(115200);
-  // put your setup code here, to run once:
-  testWire.begin(GPIO_NUM_21, GPIO_NUM_22);
-  testWire.setClock(100000L);
-  pcf8574.begin();
-  pinMode(GPIO_NUM_25, INPUT_PULLUP);
-  pcf8574.resetInterruptPin();
-  attachInterrupt(digitalPinToInterrupt(GPIO_NUM_25), PCFInterrupt, FALLING);
-}
-
-void poll_pcf8574() {
-  // put your main code here, to run repeatedly:
-  if(PCFInterruptFlag){
-    detachInterrupt(digitalPinToInterrupt(GPIO_NUM_25));
-    Serial.println("Got an interrupt: ");
-    
-    if(pcf8574.read(1)==HIGH) Serial.println("Button A is HIGH!");
-    else Serial.println("Button A is LOW!"); // it is currently down
-    pcf8574.write(7, pcf8574.read(1));
-    
-    if(pcf8574.read(2)==HIGH) Serial.println("Button B is HIGH!");
-    else Serial.println("Button B is LOW!"); // it is currently down
-    pcf8574.write(7, pcf8574.read(2));
-
-    if(pcf8574.read(3)==HIGH) Serial.println("Encoder Button is HIGH!");
-    else Serial.println("Encoder Button is LOW!"); // it is currently down
-    pcf8574.write(7, pcf8574.read(3));
-
-    PCFInterruptFlag=false;
-    pcf8574.resetInterruptPin();
-    attachInterrupt(digitalPinToInterrupt(GPIO_NUM_25), PCFInterrupt, FALLING);
-  }
-
-  delay(50);
-}
-
-void PCFInterrupt() {
-  PCFInterruptFlag = true;
-}
-
