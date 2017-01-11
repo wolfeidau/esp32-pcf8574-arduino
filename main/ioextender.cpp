@@ -9,15 +9,16 @@ PCF857x pcf8574(0x20, &testWire);
 static QueueHandle_t *subscriptions;
 static size_t num_subscriptions;
 
-volatile bool PCFInterruptFlag = false;
+static SemaphoreHandle_t interrupt_sem;
 
 static void pcf8574_check_task(void *pvParameter);
 void setup_pcf8574();
-void PCFInterrupt();
+static void PCFInterrupt();
 bool check_button(button_check_s* button);
 
 void ioextender_initialize() {
-  xTaskCreatePinnedToCore(pcf8574_check_task, "pcf8574_check_task", 4096, NULL, 1, NULL, 1);
+  interrupt_sem = xSemaphoreCreateBinary();
+  xTaskCreate(pcf8574_check_task, "pcf8574_check_task", 4096, NULL, 1, NULL);
 }
 
 bool buttons_subscribe(QueueHandle_t queue)
@@ -44,16 +45,13 @@ static void pcf8574_check_task(void *pvParameter)
   setup_pcf8574();
 
   while(1) {
-    if(PCFInterruptFlag){
-      check_button(&buttonA);
-      check_button(&buttonB);
-      check_button(&encoderButton);
+	xSemaphoreTake(interrupt_sem, portMAX_DELAY); /* Wait for interrupt */
+	pcf8574.resetInterruptPin(); /* reset before reading state, so we don't miss any events */
 
-      pcf8574.resetInterruptPin();
-      PCFInterruptFlag = false;
-    }
+	check_button(&buttonA);
+	check_button(&buttonB);
+	check_button(&encoderButton);
 
-    vTaskDelay(IOEXT_POLL_INTERVAL_MILLIS / portTICK_PERIOD_MS);
   }
 }
 
@@ -98,7 +96,10 @@ bool check_button(button_check_s* button) {
   return false;
 }
 
-void PCFInterrupt() {
-  PCFInterruptFlag = true;
+static void PCFInterrupt() {
+  portBASE_TYPE higher_task_awoken;
+  xSemaphoreGiveFromISR(interrupt_sem, &higher_task_awoken);
+  if (higher_task_awoken) {
+	portYIELD_FROM_ISR();
+  }
 }
-
